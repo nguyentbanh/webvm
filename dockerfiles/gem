@@ -2,7 +2,7 @@
 # 0. Base image: switch from i386/debian:buster to Node-preloaded
 # -----------------------------------------------------------------
 ARG TARGETPLATFORM          # optional but silences linter
-FFROM --platform=i386 i386/debian:buster
+FROM --platform=i386 i386/debian:buster
 
 ARG DEBIAN_FRONTEND=noninteractive
 
