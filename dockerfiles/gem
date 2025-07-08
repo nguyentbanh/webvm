@@ -1,4 +1,4 @@
-# Use the standard 64-bit (amd64) Debian image
+# Use the standard 64-bit (amd64) Debian image as the base. This is required for Node.js v20+.
 FROM debian:buster
 
 ARG DEBIAN_FRONTEND=noninteractive
@@ -6,20 +6,24 @@ ARG DEBIAN_FRONTEND=noninteractive
 # 1. Add the i386 architecture for multi-arch support
 RUN dpkg --add-architecture i386
 
-# 2. Update package lists for both architectures and install prerequisites
+# 2. Update and install prerequisites for adding new repositories
 RUN apt-get clean && apt-get update && apt-get -y upgrade && \
-    # Install gnupg for repository key management
-    apt-get -y install gnupg curl && \
-    # Add NodeSource repository for Node.js 20+ (this will be for amd64)
-    curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
+    apt-get install -y curl gnupg apt-transport-https
 
-# 3. Install packages.
-# Node.js will be the 64-bit version needed for Gemini CLI.
-# Your original packages are installed for the i386 architecture by appending ":i386".
+# 3. Manually add the NodeSource repository, specifying amd64 architecture
+# This is the key step to bypass the script that was failing.
+RUN mkdir -p /etc/apt/keyrings && \
+    curl -fsSL https://deb.nodesource.com/gpgkey/nodesource-repo.gpg.key | gpg --dearmor -o /etc/apt/keyrings/nodesource.gpg && \
+    echo "deb [arch=amd64 signed-by=/etc/apt/keyrings/nodesource.gpg] https://deb.nodesource.com/node_20.x buster main" > /etc/apt/sources.list.d/nodesource.list
+
+# 4. Update package lists again to include the new Node.js repository
+RUN apt-get update
+
+# 5. Install all packages.
+#    - nodejs will be installed from the amd64-only NodeSource repo.
+#    - All of your original packages are explicitly installed for the i386 architecture.
 RUN apt-get -y install \
-    # 64-bit packages
     nodejs \
-    # 32-bit (i386) packages from your original list
     apt-utils:i386 gcc:i386 \
 	python3:i386 vim:i386 unzip:i386 ruby:i386 \
 	fakeroot:i386 dbus:i386 base:i386 whiptail:i386 hexedit:i386 \
@@ -27,16 +31,14 @@ RUN apt-get -y install \
 	file:i386 luajit:i386 make:i386 lua50:i386 dialog:i386 \
 	less:i386 cowsay:i386 netcat-openbsd:i386
 
-# 4. Install the Gemini CLI globally using the 64-bit npm
+# 6. Install the Gemini CLI globally using the 64-bit npm
 RUN npm install -g @google/gemini-cli
 
 # --- The rest of your Dockerfile remains the same ---
 RUN useradd -m user && echo "user:password" | chpasswd
 COPY --chown=user:user ./examples /home/user/examples
 RUN chmod -R +x  /home/user/examples/lua
-# We set WORKDIR, as this gets extracted by Webvm to be used as the cwd. This is optional.
 WORKDIR /home/user/
-# We set env, as this gets extracted by Webvm. This is optional.
 ENV HOME="/home/user" TERM="xterm" USER="user" SHELL="/bin/bash" EDITOR="vim" LANG="en_US.UTF-8" LC_ALL="C"
 RUN echo 'root:password' | chpasswd
 CMD [ "/bin/bash" ]
