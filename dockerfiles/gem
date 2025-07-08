@@ -1,30 +1,25 @@
-# Use the standard 64-bit (amd64) Debian image as the base.
+# Use the standard 64-bit (amd64) Debian image as the base. This is required for Node.js.
 FROM debian:buster
 
 ARG DEBIAN_FRONTEND=noninteractive
 
-# 1. Fix sources.list to point to the Debian archive and add i386 architecture.
+# 1. Fix sources.list for the archived Debian Buster and add i386 architecture.
 RUN dpkg --add-architecture i386 && \
     echo "deb http://archive.debian.org/debian/ buster main" > /etc/apt/sources.list && \
     echo "deb http://archive.debian.org/debian-security buster/updates main" >> /etc/apt/sources.list && \
     echo "deb http://archive.debian.org/debian/ buster-updates main" >> /etc/apt/sources.list
 
-# 2. Update, install tools, add the NodeSource GPG key using the robust 'apt-key' method,
-#    and add the repository source.
+# 2. Update and install dependencies. We need 'curl' and 'xz-utils' for the manual Node.js install.
 RUN apt-get update && \
-    apt-get install -y --no-install-recommends curl gnupg ca-certificates && \
-    # Add the NodeSource GPG key to the global trusted keyring. This resolves the NO_PUBKEY error.
-    curl -fsSL https://deb.nodesource.com/gpgkey/nodesource-repo.gpg.key | apt-key add - && \
-    # Add the NodeSource repository (without the 'signed-by' attribute)
-    echo "deb [arch=amd64] https://deb.nodesource.com/node_20.x buster main" > /etc/apt/sources.list.d/nodesource.list && \
-    # Update again to fetch the new Node.js package list
-    apt-get update
+    apt-get install -y --no-install-recommends curl xz-utils
 
-# 3. Install all packages.
-#    - nodejs will be installed from the amd64-only NodeSource repo.
-#    - All of your original packages are explicitly installed for the i386 architecture.
+# 3. Download and install Node.js v20 manually.
+#    This avoids all the repository and GPG key errors from previous attempts.
+RUN curl -fsSL https://nodejs.org/dist/v20.15.1/node-v20.15.1-linux-x64.tar.xz \
+    | tar -xJ -C /usr/local --strip-components=1
+
+# 4. Install all of your required i386 packages.
 RUN apt-get -y install \
-    nodejs \
     apt-utils:i386 gcc:i386 \
 	python3:i386 vim:i386 unzip:i386 ruby:i386 \
 	fakeroot:i386 dbus:i386 base:i386 whiptail:i386 hexedit:i386 \
@@ -32,7 +27,7 @@ RUN apt-get -y install \
 	file:i386 luajit:i386 make:i386 lua50:i386 dialog:i386 \
 	less:i386 cowsay:i386 netcat-openbsd:i386
 
-# 4. Install the Gemini CLI globally using the 64-bit npm
+# 5. Install the Gemini CLI globally using the now-available npm.
 RUN npm install -g @google/gemini-cli
 
 # --- The rest of your Dockerfile remains the same ---
