@@ -4,20 +4,20 @@
 FROM i386/debian:bullseye AS node-build
 ARG NODE_VERSION=22.2.0
 
-# ❶  Refresh keyring first ───────────────────────────────────────
-RUN apt-get update -o Acquire::AllowReleaseInfoChange=yes \
- && apt-get install -y debian-archive-keyring ca-certificates
-
-# ❷  Now the usual build prereqs + Node source build
-RUN apt-get install -y build-essential python3 curl git \
-        pkg-config libssl-dev xz-utils \
+# refresh keyring + install build tools + build Node — all in ONE layer
+RUN set -e \
+ && apt-get update -o Acquire::AllowReleaseInfoChange=yes \
+ && apt-get install -y debian-archive-keyring ca-certificates \
+                       build-essential python3 curl git \
+                       pkg-config libssl-dev xz-utils \
  && curl -fsSL https://nodejs.org/dist/v${NODE_VERSION}/node-v${NODE_VERSION}.tar.xz \
       -o /tmp/node.tar.xz \
  && tar -C /tmp -xf /tmp/node.tar.xz \
  && cd /tmp/node-v${NODE_VERSION} \
  && ./configure --prefix=/usr/local --dest-cpu=ia32 \
  && make -j"$(nproc)" \
- && make install
+ && make install \
+ && rm -rf /var/lib/apt/lists/* /tmp/*
 
 ############################
 # Stage 1 : runtime image  #
