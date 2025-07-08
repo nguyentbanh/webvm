@@ -1,27 +1,16 @@
-# 1. Start with the official Node.js image based on Debian Buster.
-#    This gives us a working Node.js v20 and npm installation for free.
-FROM node:lts-slim
-
+FROM --platform=i386 i386/debian:buster
 ARG DEBIAN_FRONTEND=noninteractive
 
-# 2. Add 32-bit (i386) architecture support and fix the package sources to point to the Debian archive.
-#    This is still necessary because the underlying OS is Buster.
-RUN dpkg --add-architecture i386 && \
-    echo "deb http://archive.debian.org/debian/ buster main" > /etc/apt/sources.list && \
-    echo "deb http://archive.debian.org/debian-security buster/updates main" >> /etc/apt/sources.list && \
-    echo "deb http://archive.debian.org/debian/ buster-updates main" >> /etc/apt/sources.list
+RUN apt-get update && apt-get -y upgrade && \
+	apt-get install -y apt-utils beef bsdgames bsdmainutils ca-certificates clang \
+	cowsay cpio cron curl dmidecode dmsetup g++ gcc gdbm-l10n git  \
+	hexedit  ifupdown init logrotate lsb-base lshw lua50 luajit lynx make \
+	nano netbase nodejs openssl procps python3 python3-cryptography \
+	python3-jinja2 python3-numpy python3-pandas python3-pip python3-scipy \
+	python3-six python3-yaml readline-common rsyslog ruby sensible-utils \
+	ssh systemd systemd-sysv tasksel tasksel-data udev vim wget whiptail \
+	xxd iptables isc-dhcp-client isc-dhcp-common kmod less netcat-openbsd
 
-# 3. Update package lists and install all of your required i386 packages.
-RUN apt-get update && \
-    apt-get install -y --no-install-recommends \
-    apt-utils:i386 gcc:i386 \
-	python3:i386 vim:i386 unzip:i386 ruby:i386 \
-	fakeroot:i386 dbus:i386 base:i386 whiptail:i386 hexedit:i386 \
-	patch:i386 wamerican:i386 ucf:i386 manpages:i386 \
-	file:i386 luajit:i386 make:i386 lua50:i386 dialog:i386 \
-	less:i386 cowsay:i386 netcat-openbsd:i386
-
-# 4. Install the Gemini CLI globally. npm is already available from the base image.
 RUN npm install -g @google/gemini-cli
 
 # --- The rest of your Dockerfile remains the same ---
