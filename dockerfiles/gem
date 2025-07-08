@@ -3,21 +3,20 @@ FROM debian:buster
 
 ARG DEBIAN_FRONTEND=noninteractive
 
-# 1. Add i386 architecture and, most importantly, update sources.list to point to the Debian archive.
-#    This is necessary because Buster is an old release and its repositories have moved.
-#    [trusted=yes] is used to avoid potential GPG key issues with the archive.
+# 1. Fix sources.list to point to the Debian archive and add i386 architecture.
 RUN dpkg --add-architecture i386 && \
-    echo "deb [trusted=yes] http://archive.debian.org/debian/ buster main" > /etc/apt/sources.list && \
-    echo "deb [trusted=yes] http://archive.debian.org/debian-security buster/updates main" >> /etc/apt/sources.list && \
-    echo "deb [trusted=yes] http://archive.debian.org/debian/ buster-updates main" >> /etc/apt/sources.list
+    echo "deb http://archive.debian.org/debian/ buster main" > /etc/apt/sources.list && \
+    echo "deb http://archive.debian.org/debian-security buster/updates main" >> /etc/apt/sources.list && \
+    echo "deb http://archive.debian.org/debian/ buster-updates main" >> /etc/apt/sources.list
 
-# 2. Run a single layer to update, install tools, and add the NodeSource repository.
-#    This is more efficient and avoids potential caching issues.
+# 2. Update, install tools, add the NodeSource GPG key using the robust 'apt-key' method,
+#    and add the repository source.
 RUN apt-get update && \
-    apt-get install -y curl gnupg apt-transport-https && \
-    mkdir -p /etc/apt/keyrings && \
-    curl -fsSL https://deb.nodesource.com/gpgkey/nodesource-repo.gpg.key | gpg --dearmor -o /etc/apt/keyrings/nodesource.gpg && \
-    echo "deb [arch=amd64 signed-by=/etc/apt/keyrings/nodesource.gpg] https://deb.nodesource.com/node_20.x buster main" > /etc/apt/sources.list.d/nodesource.list && \
+    apt-get install -y --no-install-recommends curl gnupg ca-certificates && \
+    # Add the NodeSource GPG key to the global trusted keyring. This resolves the NO_PUBKEY error.
+    curl -fsSL https://deb.nodesource.com/gpgkey/nodesource-repo.gpg.key | apt-key add - && \
+    # Add the NodeSource repository (without the 'signed-by' attribute)
+    echo "deb [arch=amd64] https://deb.nodesource.com/node_20.x buster main" > /etc/apt/sources.list.d/nodesource.list && \
     # Update again to fetch the new Node.js package list
     apt-get update
 
