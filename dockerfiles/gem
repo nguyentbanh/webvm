@@ -1,54 +1,42 @@
-############################
-# Stage 0 : build Node 22  #
-############################
-FROM i386/debian:bullseye AS node-build
-ARG NODE_VERSION=22.2.0
+# Use the standard 64-bit (amd64) Debian image
+FROM debian:buster
 
-# refresh keyring + install build tools + build Node — all in ONE layer
-RUN set -e \
- && apt-get update -o Acquire::AllowReleaseInfoChange=yes \
- && apt-get install -y debian-archive-keyring ca-certificates \
-                       build-essential python3 curl git \
-                       pkg-config libssl-dev xz-utils \
- && curl -fsSL https://nodejs.org/dist/v${NODE_VERSION}/node-v${NODE_VERSION}.tar.xz \
-      -o /tmp/node.tar.xz \
- && tar -C /tmp -xf /tmp/node.tar.xz \
- && cd /tmp/node-v${NODE_VERSION} \
- && ./configure --prefix=/usr/local --dest-cpu=ia32 \
- && make -j"$(nproc)" \
- && make install \
- && rm -rf /var/lib/apt/lists/* /tmp/*
+ARG DEBIAN_FRONTEND=noninteractive
 
-############################
-# Stage 1 : runtime image  #
-############################
-FROM i386/debian:bullseye-slim
+# 1. Add the i386 architecture for multi-arch support
+RUN dpkg --add-architecture i386
 
-# Same key-refresh trick for the runtime layer
-RUN apt-get update -o Acquire::AllowReleaseInfoChange=yes \
- && apt-get install -y debian-archive-keyring ca-certificates
+# 2. Update package lists for both architectures and install prerequisites
+RUN apt-get clean && apt-get update && apt-get -y upgrade && \
+    # Install gnupg for repository key management
+    apt-get -y install gnupg curl && \
+    # Add NodeSource repository for Node.js 20+ (this will be for amd64)
+    curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
 
-# Bring node + npm from the builder
-COPY --from=node-build /usr/local /usr/local
+# 3. Install packages.
+# Node.js will be the 64-bit version needed for Gemini CLI.
+# Your original packages are installed for the i386 architecture by appending ":i386".
+RUN apt-get -y install \
+    # 64-bit packages
+    nodejs \
+    # 32-bit (i386) packages from your original list
+    apt-utils:i386 gcc:i386 \
+	python3:i386 vim:i386 unzip:i386 ruby:i386 \
+	fakeroot:i386 dbus:i386 base:i386 whiptail:i386 hexedit:i386 \
+	patch:i386 wamerican:i386 ucf:i386 manpages:i386 \
+	file:i386 luajit:i386 make:i386 lua50:i386 dialog:i386 \
+	less:i386 cowsay:i386 netcat-openbsd:i386
 
-# Whatever extra packages you still need
-RUN apt-get update && apt-get install -y \
-      vim git curl ruby less … \
- && rm -rf /var/lib/apt/lists/*
-
-# Gemini CLI
+# 4. Install the Gemini CLI globally using the 64-bit npm
 RUN npm install -g @google/gemini-cli
 
-# -----------------------------------------------------------------
-# 3.  The rest of your original Dockerfile
-# -----------------------------------------------------------------
+# --- The rest of your Dockerfile remains the same ---
 RUN useradd -m user && echo "user:password" | chpasswd
 COPY --chown=user:user ./examples /home/user/examples
-RUN chmod -R +x /home/user/examples/lua
-
+RUN chmod -R +x  /home/user/examples/lua
+# We set WORKDIR, as this gets extracted by Webvm to be used as the cwd. This is optional.
 WORKDIR /home/user/
-ENV HOME="/home/user" TERM="xterm" USER="user" SHELL="/bin/bash" \
-    EDITOR="vim" LANG="en_US.UTF-8" LC_ALL="C"
-
+# We set env, as this gets extracted by Webvm. This is optional.
+ENV HOME="/home/user" TERM="xterm" USER="user" SHELL="/bin/bash" EDITOR="vim" LANG="en_US.UTF-8" LC_ALL="C"
 RUN echo 'root:password' | chpasswd
-CMD ["/bin/bash"]
+CMD [ "/bin/bash" ]
