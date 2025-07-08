@@ -1,0 +1,56 @@
+# --------------------------------------------------------------
+# 0. Base image (unchanged)
+# --------------------------------------------------------------
+FROM --platform=i386 i386/debian:buster
+
+ARG DEBIAN_FRONTEND=noninteractive
+
+# --------------------------------------------------------------
+# 1. System packages
+#    – added: build tools + libs needed to compile Node 20
+#    – removed: the old 'nodejs' package that is only v10 in Buster
+# --------------------------------------------------------------
+RUN apt-get clean && apt-get update && apt-get -y upgrade && \
+    apt-get -y install --no-install-recommends \
+        apt-utils gcc g++ make python3 curl git ca-certificates \
+        fakeroot dbus base whiptail hexedit \
+        patch wamerican ucf manpages \
+        file luajit lua50 dialog \
+        unzip ruby \
+        less cowsay netcat-openbsd \
+        xz-utils pkg-config libssl-dev && \
+    rm -rf /var/lib/apt/lists/*
+
+# --------------------------------------------------------------
+# 2. Build & install Node.js 20 (32-bit) from source
+# --------------------------------------------------------------
+ENV NODE_VERSION=20.16.0
+RUN curl -fsSL https://nodejs.org/dist/v${NODE_VERSION}/node-v${NODE_VERSION}.tar.xz \
+        -o /tmp/node.tar.xz && \
+    tar -C /tmp -xf /tmp/node.tar.xz && \
+    cd /tmp/node-v${NODE_VERSION} && \
+    ./configure --prefix=/usr/local --fully-static && \
+    make -j"$(nproc)" && make install && \
+    cd / && rm -rf /tmp/node* && \
+    node -v   && npm -v   # sanity-check
+
+# --------------------------------------------------------------
+# 3. Install Gemini CLI globally (needs Node 20+ [[1]])
+# --------------------------------------------------------------
+RUN npm install -g @google/gemini-cli && \
+    gemini --version || true   # optional: prints version, exits 0
+
+# --------------------------------------------------------------
+# 4. Everything else (kept from your original file)
+# --------------------------------------------------------------
+RUN useradd -m user && echo "user:password" | chpasswd
+COPY --chown=user:user ./examples /home/user/examples
+RUN chmod -R +x /home/user/examples/lua
+
+WORKDIR /home/user/
+ENV HOME="/home/user" TERM="xterm" USER="user" SHELL="/bin/bash" \
+    EDITOR="vim" LANG="en_US.UTF-8" LC_ALL="C"
+
+RUN echo 'root:password' | chpasswd
+
+CMD ["/bin/bash"]
