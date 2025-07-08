@@ -1,26 +1,42 @@
-###########################################
-# Stage 0 : build Node from source (i386) #
-###########################################
+############################
+# Stage 0 : build Node 22  #
+############################
 FROM i386/debian:bullseye AS node-build
-ARG NODE_VERSION=22.2.0          # pick any ≥20
-RUN apt-get update && apt-get install -y \
-        build-essential python3 curl git ca-certificates \
-        pkg-config libssl-dev xz-utils && \
-    curl -fsSL https://nodejs.org/dist/v${NODE_VERSION}/node-v${NODE_VERSION}.tar.xz \
-         -o /tmp/node.tar.xz && \
-    tar -C /tmp -xf /tmp/node.tar.xz && \
-    cd /tmp/node-v${NODE_VERSION} && \
-    ./configure --prefix=/usr/local --dest-cpu=ia32 && \
-    make -j"$(nproc)" && make install
+ARG NODE_VERSION=22.2.0
 
-###########################################
-# Stage 1 : final runtime image (i386)    #
-###########################################
+# ❶  Refresh keyring first ───────────────────────────────────────
+RUN apt-get update -o Acquire::AllowReleaseInfoChange=yes \
+ && apt-get install -y debian-archive-keyring ca-certificates
+
+# ❷  Now the usual build prereqs + Node source build
+RUN apt-get install -y build-essential python3 curl git \
+        pkg-config libssl-dev xz-utils \
+ && curl -fsSL https://nodejs.org/dist/v${NODE_VERSION}/node-v${NODE_VERSION}.tar.xz \
+      -o /tmp/node.tar.xz \
+ && tar -C /tmp -xf /tmp/node.tar.xz \
+ && cd /tmp/node-v${NODE_VERSION} \
+ && ./configure --prefix=/usr/local --dest-cpu=ia32 \
+ && make -j"$(nproc)" \
+ && make install
+
+############################
+# Stage 1 : runtime image  #
+############################
 FROM i386/debian:bullseye-slim
-COPY --from=node-build /usr/local /usr/local    # brings in node + npm
-RUN apt-get update && apt-get install -y --no-install-recommends \
-        curl vim git ruby less … && \
-    rm -rf /var/lib/apt/lists/*
+
+# Same key-refresh trick for the runtime layer
+RUN apt-get update -o Acquire::AllowReleaseInfoChange=yes \
+ && apt-get install -y debian-archive-keyring ca-certificates
+
+# Bring node + npm from the builder
+COPY --from=node-build /usr/local /usr/local
+
+# Whatever extra packages you still need
+RUN apt-get update && apt-get install -y \
+      vim git curl ruby less … \
+ && rm -rf /var/lib/apt/lists/*
+
+# Gemini CLI
 RUN npm install -g @google/gemini-cli
 
 # -----------------------------------------------------------------
